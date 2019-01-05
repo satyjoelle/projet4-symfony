@@ -4,9 +4,11 @@
 
 namespace OC\PlatformBundle\Controller;
 
+use OC\PlatformBundle\Entity\Advert;
+use OC\PlatformBundle\Form\AdvertType;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
 
 class AdvertController extends Controller
 {
@@ -64,71 +66,115 @@ class AdvertController extends Controller
 
     public function viewAction($id)
     {
-        $advert = array(
-            'title'   => 'Recherche développpeur Symfony2',
-            'id'      => $id,
-            'author'  => 'Alexandre',
-            'content' => 'Nous recherchons un développeur Symfony2 débutant sur Lyon. Blabla…',
-            'date'    => new \Datetime()
-        );
+        $em = $this->getDoctrine()->getManager();
+
+        // Pour récupérer une seule annonce, on utilise la méthode find($id)
+        $advert = $em->getRepository('OCPlatformBundle:Advert')->find($id);
+
+        // $advert est donc une instance de OC\PlatformBundle\Entity\Advert
+        // ou null si l'id $id n'existe pas, d'où ce if :
+        if (null === $advert) {
+            throw new NotFoundHttpException("L'annonce d'id ".$id." n'existe pas.");
+        }
+
+        // Récupération de la liste des candidatures de l'annonce
+        $listApplications = $em
+            ->getRepository('OCPlatformBundle:Application')
+            ->findBy(array('advert' => $advert))
+        ;
+
+        // Récupération des AdvertSkill de l'annonce
+        $listAdvertSkills = $em
+            ->getRepository('OCPlatformBundle:AdvertSkill')
+            ->findBy(array('advert' => $advert))
+        ;
 
         return $this->render('OCPlatformBundle:Advert:view.html.twig', array(
-            'advert' => $advert
+            'advert'           => $advert,
+            'listApplications' => $listApplications,
+            'listAdvertSkills' => $listAdvertSkills,
         ));
     }
 
+    public function addAction(Request $request)
+    {
+        $advert = new Advert();
+        $form   = $this->get('form.factory')->create(AdvertType::class, $advert);
 
+        if ($request->isMethod('POST') && $form->handleRequest($request)->isValid()) {
+            $em = $this->getDoctrine()->getManager();
+            $em->persist($advert);
+            $em->flush();
 
-   public function addAction(Request $request)
-   {
+            $request->getSession()->getFlashBag()->add('notice', 'Annonce bien enregistrée.');
 
+            return $this->redirectToRoute('oc_platform_view', array('id' => $advert->getId()));
+        }
 
-       //La gestion d'un formulaire est particulière, mais l'idée est la suivante :
-       //si la requête est en POST, c'est que le visiteur a soumis le formulaire
-
-       if ($request->isMethod('POST')) {
-           //Ici, on s'occupera de la création et de la gestion du formulaire
-
-           $request->getSession()->getFlashBag()->add('notice', 'Annonce bien enregistrée.');
-
-           //Puis on redirige vers la page de visualisation de cette annonce
-           return $this->redirectToRoute('oc_platform_view', array('id' => 5));
-       }
-
-       //si on n'est pas en POST, alors on affiche le formulaire
-       return $this->render('OCPlatformBundle:Advert:add.html.twig');
-
-   }
-
-
+        return $this->render('OCPlatformBundle:Advert:add.html.twig', array(
+            'form' => $form->createView(),
+        ));
+    }
 
 
     public function editAction($id, Request $request)
     {
-        // ...
+        $em = $this->getDoctrine()->getManager();
 
-        $advert = array(
-            'title'   => 'Recherche développpeur Symfony',
-            'id'      => $id,
-            'author'  => 'Alexandre',
-            'content' => 'Nous recherchons un développeur Symfony débutant sur Lyon. Blabla…',
-            'date'    => new \Datetime()
-        );
+        $advert = $em->getRepository('OCPlatformBundle:Advert')->find($id);
+
+        if (null === $advert) {
+            throw new NotFoundHttpException("L'annonce d'id ".$id." n'existe pas.");
+        }
+
+        $form = $this->get('form.factory')->create(AdvertEditType::class, $advert);
+
+        if ($request->isMethod('POST') && $form->handleRequest($request)->isValid()) {
+            // Inutile de persister ici, Doctrine connait déjà notre annonce
+            $em->flush();
+
+            $request->getSession()->getFlashBag()->add('notice', 'Annonce bien modifiée.');
+
+            return $this->redirectToRoute('oc_platform_view', array('id' => $advert->getId()));
+        }
 
         return $this->render('OCPlatformBundle:Advert:edit.html.twig', array(
-            'advert' => $advert
+            'advert' => $advert,
+            'form'   => $form->createView(),
         ));
     }
 
 
-   public function deleteAction($id)
-   {
-       //Ici, on récupérera l'annonce correspondant à $id
+    public function deleteAction(Request $request, $id)
+    {
+        $em = $this->getDoctrine()->getManager();
 
-       //ici, on gérera la suppression de l'annince en question
+        $advert = $em->getRepository('OCPlatformBundle:Advert')->find($id);
 
-       return $this->render('OCPlatformBundle:Advert:delete.html.twig');
-   }
+        if (null === $advert) {
+            throw new NotFoundHttpException("L'annonce d'id ".$id." n'existe pas.");
+        }
+
+        // On crée un formulaire vide, qui ne contiendra que le champ CSRF
+        // Cela permet de protéger la suppression d'annonce contre cette faille
+        $form = $this->get('form.factory')->create();
+
+        if ($request->isMethod('POST') && $form->handleRequest($request)->isValid()) {
+            $em->remove($advert);
+            $em->flush();
+
+            $request->getSession()->getFlashBag()->add('info', "L'annonce a bien été supprimée.");
+
+            return $this->redirectToRoute('oc_platform_home');
+        }
+
+        return $this->render('OCPlatformBundle:Advert:delete.html.twig', array(
+            'advert' => $advert,
+            'form'   => $form->createView(),
+        ));
+    }
+
+
 
 
 }

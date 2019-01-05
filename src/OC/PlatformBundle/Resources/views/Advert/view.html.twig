@@ -4,6 +4,8 @@
 
 {% block title %}
     Lecture d'une annonce - {{ parent() }}
+
+
 {% endblock %}
 
 {% block ocplatform_body %}
@@ -30,4 +32,16 @@
         </a>
     </p>
 
+    <img
+            src="{{ asset(advert.image.uploadDir ~ '/' ~ advert.image.id ~ '.' ~ advert.image.url) }}"
+            alt="{{ advert.image.alt }}"
+    />
+
+    <img
+            src="{{ asset(advert.image.webPath) }}"
+            alt="{{ advert.image.alt }}"
+    />
+
+
 {% endblock %}
+
